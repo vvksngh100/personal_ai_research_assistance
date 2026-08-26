@@ -1,0 +1,27 @@
+{
+  "name": "personal_ai_research_assistance",
+  "version": "1.0.0",
+  "description": "This project I am creating for the RAG practice",
+  "homepage": "https://github.com/vvksngh100/personal_ai_research_assistance#readme",
+  "bugs": {
+    "url": "https://github.com/vvksngh100/personal_ai_research_assistance/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vvksngh100/personal_ai_research_assistance.git"
+  },
+  "license": "MIT",
+  "author": "Vivek Singh",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "body-parser": "^2.3.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "multer": "^2.2.0",
+    "pg": "^8.23.0"
+  }
+}
