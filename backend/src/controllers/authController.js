@@ -10,10 +10,11 @@ export const generateGuestId = (req, res) => {
         const guestId = uuid4();
         const payload = {guest_id: guestId};
         const secretKey = process.env.JWT_SECRET;
-        const token = jwt.sign(payload, secretKey, {expiresIn: process.env.GUEST_JWT_EXPIRES})
-        res.status(200).json({guestToke: token});
+        const expiresIn = process.env.GUEST_JWT_EXPIRES || '24h';
+        const token = jwt.sign(payload, secretKey, { expiresIn });
+        res.status(200).json({ guestToken: token, token, guest_id: guestId });
     } catch (err) {
         console.error('Error generating guest ID: ', err);
-        res.status(500).json({error: 'Internal Server Error'});
+        res.status(500).json({ error: 'Internal Server Error' });
     }
 }

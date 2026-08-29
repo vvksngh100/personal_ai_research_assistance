@@ -1,5 +1,5 @@
 import express from 'express';
-import { generateGuestId } from '../controllers/authController';
+import { generateGuestId } from '../controllers/authController.js';
 
 const router = express.Router();
 

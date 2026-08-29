@@ -1,4 +1,4 @@
-import { rateLimit } from 'express-rate-limit';
+import { rateLimit, ipKeyGenerator } from 'express-rate-limit';
 
 export const globalRateLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -15,11 +15,11 @@ export const heavyOperationLimiter = rateLimit({
         if(req.user && req.user.id){
             return `user_${req.user.id}`;
         }  
-        if(req.guest && req.guest.id){
-            return `guest_${req.guest.id}`;
+        if (req.guest && (req.guest.id || req.guest.guest_id)) {
+            return `guest_${req.guest.id || req.guest.guest_id}`;
         }
 
-        return req.ip;
+        return ipKeyGenerator(req.ip);
     },
     message: {error: 'You are doing that too often. Please slow down.'}
 }); 

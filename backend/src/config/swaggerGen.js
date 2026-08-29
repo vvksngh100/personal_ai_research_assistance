@@ -1,0 +1,139 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { configDotenv } from 'dotenv';
+
+configDotenv();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const PORT = process.env.PORT || 5000;
+
+const doc = {
+  openapi: '3.0.0',
+  info: {
+    title: 'Personal AI Research Assistant API',
+    description: 'API documentation for PDF upload, vectorization, and RAG assistant',
+    version: '1.0.0',
+  },
+  servers: [
+    {
+      url: `http://localhost:${PORT}`,
+      description: 'Development server',
+    },
+  ],
+  components: {
+    securitySchemes: {
+      bearerAuth: {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Enter your JWT token obtained from /api/auth/guest-id. Swagger UI will automatically attach the "Bearer " prefix.',
+      },
+    },
+  },
+  paths: {
+    "/": {
+      get: {
+        tags: ["Health"],
+        summary: "Health check / Welcome endpoint",
+        responses: {
+          200: {
+            description: "Server is running",
+          },
+        },
+      },
+    },
+    "/api/auth/guest-id": {
+      get: {
+        tags: ["Auth"],
+        summary: "Generate guest JWT token",
+        description: "Creates an anonymous guest session and returns a JWT token for authenticating subsequent requests.",
+        responses: {
+          200: {
+            description: "Guest token successfully created",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    guestToken: { type: "string" },
+                    token: { type: "string" },
+                    guest_id: { type: "string" },
+                  },
+                },
+              },
+            },
+          },
+          500: {
+            description: "Internal Server Error",
+          },
+        },
+      },
+    },
+    "/api/upload": {
+      post: {
+        tags: ["Upload"],
+        summary: "Upload and vectorize a PDF document",
+        description: "Uploads a PDF file, parses text, generates embeddings, and indexes them in Pinecone under the user's namespace.",
+        security: [
+          {
+            bearerAuth: [],
+          },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            "multipart/form-data": {
+              schema: {
+                type: "object",
+                properties: {
+                  file: {
+                    type: "string",
+                    format: "binary",
+                    description: "PDF file to upload and vectorize (max 10MB)",
+                  },
+                },
+                required: ["file"],
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Document processed and vectorized successfully",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    message: { type: "string" },
+                    document_id: { type: "string" },
+                    chunks_processed: { type: "integer" },
+                  },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Bad Request (missing file or non-PDF file)",
+          },
+          401: {
+            description: "Unauthorized (missing or invalid Bearer token)",
+          },
+          429: {
+            description: "Too many requests / Rate limited",
+          },
+          500: {
+            description: "Failed to process and vectorize document",
+          },
+        },
+      },
+    },
+  },
+};
+
+const outputPath = path.join(__dirname, 'swagger-output.json');
+fs.writeFileSync(outputPath, JSON.stringify(doc, null, 2), 'utf-8');
+console.log('✅ Swagger documentation successfully generated at:', outputPath);

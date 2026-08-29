@@ -15,20 +15,29 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "swagger": "node src/config/swaggerGen.js",
+    "start": "node src/config/swaggerGen.js && node server.js",
+    "dev": "node src/config/swaggerGen.js && nodemon server.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "init-db": "node -e \"import('./src/config/initDb.js').then(m => m.initializeDatabase().then(() => process.exit(0)))\""
   },
   "dependencies": {
+    "@pinecone-database/pinecone": "^8.2.0",
+    "@xenova/transformers": "^2.17.2",
     "bcrypt": "^6.0.0",
-    "body-parser": "^2.3.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.6.2",
     "jsonwebtoken": "^9.0.3",
-    "multer": "^2.2.0",
+    "multer": "^2.3.0",
+    "nodemon": "^3.1.14",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
-    "swagger-jsdoc": "^6.3.0",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^14.0.2"
+  },
+  "devDependencies": {
+    "swagger-autogen": "^2.23.7"
   }
 }
