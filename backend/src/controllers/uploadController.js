@@ -43,9 +43,28 @@ export const uploadDocument = async (req, res) => {
 
         // 2. Extract text & create chunks
         const text = await extractTextFromPDF(req.file.buffer);
+
+        if (!text || text.trim().length === 0) {
+            console.warn(`[Upload] PDF "${fileName}" contained 0 extractable text characters.`);
+            await pool.query('UPDATE documents SET status = $1 WHERE id = $2', ['failed', documentId]);
+            return res.status(400).json({
+                error: 'No text could be extracted from this PDF. It may be an image-only scan, blank, or password-protected.'
+            });
+        }
+
         const chunks = chunkText(text);
+        console.log(`[Upload] Generated ${chunks.length} chunks for "${fileName}"`);
+
+        if (chunks.length === 0) {
+            console.warn(`[Upload] Chunking produced 0 chunks for "${fileName}".`);
+            await pool.query('UPDATE documents SET status = $1 WHERE id = $2', ['failed', documentId]);
+            return res.status(400).json({
+                error: 'Failed to create text chunks from the document.'
+            });
+        }
 
         // 3. Generate embeddings via Transformers.js
+        console.log(`[Upload] Generating embeddings for ${chunks.length} chunk(s)...`);
         const embeddedChunks = await generateBatchEmbeddings(chunks);
 
         // 4. Format vectors for Pinecone
@@ -59,9 +78,15 @@ export const uploadDocument = async (req, res) => {
             }
         }));
 
+        if (!vectors || vectors.length === 0) {
+            await pool.query('UPDATE documents SET status = $1 WHERE id = $2', ['failed', documentId]);
+            return res.status(400).json({ error: 'No vector embeddings generated for document' });
+        }
+
         // 5. Upsert to Pinecone under document namespace
+        console.log(`[Upload] Upserting ${vectors.length} vector(s) to Pinecone namespace: ${namespace}...`);
         const index = getPineconeIndex();
-        await index.namespace(namespace).upsert(vectors);
+        await index.namespace(namespace).upsert({ records: vectors });
 
         // 6. Mark document as ready in PostgreSQL
         await pool.query('UPDATE documents SET status = $1 WHERE id = $2', ['ready', documentId]);
