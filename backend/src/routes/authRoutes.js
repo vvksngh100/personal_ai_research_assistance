@@ -1,8 +1,9 @@
 import express from 'express';
-import { generateGuestId } from '../controllers/authController.js';
+import { generateGuestId, register } from '../controllers/authController.js';
 
 const router = express.Router();
 
 router.get('/guest-id', generateGuestId);
+router.post('/register', register);
 
 export default router;
