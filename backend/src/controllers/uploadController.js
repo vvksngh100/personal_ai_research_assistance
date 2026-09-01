@@ -24,7 +24,7 @@ export const uploadDocument = async (req, res) => {
         const fileName = req.file.originalname;
         const fileSize = req.file.size;
 
-        // 1. Initial DB record creation
+        // Initial DB record creation
         const insertDocQuery = `
             INSERT INTO documents (id, user_id, guest_id, file_name, file_path, file_size_bytes, mime_type, status, pinecone_namespace)
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'processing', $8)
@@ -41,7 +41,7 @@ export const uploadDocument = async (req, res) => {
             namespace
         ]);
 
-        // 2. Extract text & create chunks
+        // Extract text & create chunks
         const text = await extractTextFromPDF(req.file.buffer);
 
         if (!text || text.trim().length === 0) {
@@ -63,11 +63,11 @@ export const uploadDocument = async (req, res) => {
             });
         }
 
-        // 3. Generate embeddings via Transformers.js
+        // Generate embeddings via Transformers.js
         console.log(`[Upload] Generating embeddings for ${chunks.length} chunk(s)...`);
         const embeddedChunks = await generateBatchEmbeddings(chunks);
 
-        // 4. Format vectors for Pinecone
+        // Format vectors for Pinecone
         const vectors = embeddedChunks.map((item, index) => ({
             id: `${documentId}_chunk_${index}`,
             values: item.embedding,
@@ -83,12 +83,12 @@ export const uploadDocument = async (req, res) => {
             return res.status(400).json({ error: 'No vector embeddings generated for document' });
         }
 
-        // 5. Upsert to Pinecone under document namespace
+        // Upsert to Pinecone under document namespace
         console.log(`[Upload] Upserting ${vectors.length} vector(s) to Pinecone namespace: ${namespace}...`);
         const index = getPineconeIndex();
         await index.namespace(namespace).upsert({ records: vectors });
 
-        // 6. Mark document as ready in PostgreSQL
+        // Mark document as ready in PostgreSQL
         await pool.query('UPDATE documents SET status = $1 WHERE id = $2', ['ready', documentId]);
 
         return res.status(201).json({

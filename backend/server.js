@@ -7,6 +7,7 @@ import { setupSwagger } from './src/config/swagger.js';
 import cors from 'cors';
 import uploadRouter from './src/routes/uploadRoutes.js';
 import chatRoutes from './src/routes/chatRoutes.js';
+import { startGuestCleanupJob } from './src/jobs/guestCleanupJob.js';
 
 configDotenv();
 
@@ -36,6 +37,8 @@ app.use('/api/chat', chatRoutes);
 
 app.listen(PORT, async () => {
     console.log(`Server is started at port ${PORT}`);
+
+    startGuestCleanupJob();
 
     try {
         const result = await query('SELECT NOW()');
