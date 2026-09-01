@@ -6,6 +6,7 @@ import { globalRateLimiter } from './src/config/rateLimiter.js';
 import { setupSwagger } from './src/config/swagger.js';
 import cors from 'cors';
 import uploadRouter from './src/routes/uploadRoutes.js';
+import chatRoutes from './src/routes/chatRoutes.js';
 
 configDotenv();
 
@@ -28,7 +29,10 @@ app.get('/', (req,res) => {
 app.use('/api/auth', authRoutes);
 
 // Upload routes
-app.use('/api/upload', uploadRouter)
+app.use('/api/upload', uploadRouter);
+
+// Chat & RAG routes
+app.use('/api/chat', chatRoutes);
 
 app.listen(PORT, async () => {
     console.log(`Server is started at port ${PORT}`);
