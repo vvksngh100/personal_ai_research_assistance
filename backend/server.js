@@ -11,7 +11,7 @@ import { startGuestCleanupJob } from './src/jobs/guestCleanupJob.js';
 
 configDotenv();
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 3000;
 
 const app = express();
 
@@ -22,7 +22,7 @@ setupSwagger(app);
 
 app.use(globalRateLimiter);
 
-app.get('/', (req,res) => {
+app.get('/', (req, res) => {
     res.send('Hello World');
 });
 
