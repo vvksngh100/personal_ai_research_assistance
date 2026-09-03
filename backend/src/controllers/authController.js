@@ -13,19 +13,19 @@ const saltRounds = 10;
 export const generateGuestId = (req, res) => {
     try {
         const guestId = uuid4();
-        const payload = {guest_id: guestId};
+        const payload = { guest_id: guestId };
         const secretKey = process.env.JWT_SECRET;
         const expiresIn = process.env.GUEST_JWT_EXPIRES || '24h';
         const token = jwt.sign(payload, secretKey, { expiresIn });
-        res.status(200).json({ guestToken: token, token, guest_id: guestId });
+        res.status(200).json({ status: true, token, guest_id: guestId });
     } catch (err) {
         console.error('Error generating guest ID: ', err);
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ status: false, message: 'Internal Server Error' });
     }
 }
 
 // Sign up
-export const register = async(req, res) => {
+export const register = async (req, res) => {
     try {
         const { guestId, name, username, email, password } = req.body;
 
@@ -38,10 +38,10 @@ export const register = async(req, res) => {
         }
 
         const validationResult = validator(req.body, validationRule);
-        if(validationResult.fails()){
+        if (validationResult.fails()) {
             return res.status(400).json({
-              error: 'Validation Failed',
-              details: validationResult.errors.all(),      
+                error: 'Validation Failed',
+                details: validationResult.errors.all(),
             });
         }
 
@@ -52,7 +52,7 @@ export const register = async(req, res) => {
 
         const newUser = userData.rows[0];
 
-        if(guestId){
+        if (guestId) {
             await pool.query(
                 `UPDATE documents SET user_id = $1, guest_id = NULL WHERE guest_id = $2`,
                 [newUser.id, guestId]
@@ -64,12 +64,13 @@ export const register = async(req, res) => {
         }
 
         const token = jwt.sign(
-            {id: newUser.id, email: newUser.email},
+            { id: newUser.id, email: newUser.email },
             process.env.JWT_SECRET,
-            {expiresIn: process.env.JWT_EXPIRES}
+            { expiresIn: process.env.JWT_EXPIRES }
         );
 
         res.status(201).json({
+            status: true,
             message: 'User registered successfully!',
             token,
             user: {
@@ -82,13 +83,82 @@ export const register = async(req, res) => {
 
     } catch (err) {
         console.error('[Signup Error]: ', err);
-        if(err.code === '23505'){
+        if (err.code === '23505') {
             return res.status(409).json({
-                error: 'User with this email or username already exists'
+                status: false,
+                message: 'User with this email or username already exists'
             });
         }
         return res.status(500).json({
-            error: 'Internal Server Error'
+            status: false,
+            message: 'Internal Server Error'
         });
     }
+}
+
+// Login
+export const login = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        const validationRules = {
+            email: 'required|email',
+            password: 'required'
+        };
+
+        const validationResult = validator(req.body, validationRules);
+
+        if (validationResult.fails()) {
+            return res.status(409).json({
+                error: 'Validation Failed',
+                details: validationResult.errors.all(),
+            });
+        }
+
+        const userQuery = `SELECT * FROM users where email = $1`;
+        const userData = await pool.query(userQuery, [email]);
+        const loggedInUser = userData.rows[0];
+        if(!loggedInUser){
+            return res.status(400).json({
+                status: false,
+                message: 'You have entered the wrong credentials.'
+            });
+        }
+        
+        const isMatched = await bcrypt.compare(password, loggedInUser.password_hash);
+
+        if(isMatched){
+            const payload = {
+                id: loggedInUser.id,
+                name: loggedInUser.name,
+                email: loggedInUser.email,
+            };
+
+            const token = jwt.sign(payload, process.env.JWT_SECRET, {expiresIn: process.env.JWT_EXPIRES});
+
+            return res.status(200).json({
+                status: true,
+                message: 'User logged in successfully!',
+                token,
+                user: {
+                    id: loggedInUser.id,
+                    email: loggedInUser.email,
+                    name: loggedInUser.name,
+                    username: loggedInUser.username,
+                }
+            });
+        }
+
+        res.status(400).json({
+            status: false,
+            message: 'You have enter the wrong credentials',
+        });
+    } catch (err) {
+        console.error('[Login Error]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Something went wrong',
+        });
+    }
+
 }

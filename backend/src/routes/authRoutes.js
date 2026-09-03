@@ -1,9 +1,10 @@
 import express from 'express';
-import { generateGuestId, register } from '../controllers/authController.js';
+import { generateGuestId, register, login } from '../controllers/authController.js';
 
 const router = express.Router();
 
 router.get('/guest-id', generateGuestId);
 router.post('/register', register);
+router.post('/login', login)
 
 export default router;

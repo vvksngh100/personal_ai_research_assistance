@@ -70,6 +70,55 @@
         }
       }
     },
+    "/api/auth/register": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Register a new user",
+        "description": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Name of the user"
+                },
+                "email": {
+                  "type": "string",
+                  "description": "Eamil to register a new user"
+                },
+                "password": {
+                  "type": "string",
+                  "description": "Password"
+                },
+                "guestId": {
+                  "type": "string",
+                  "description": "Guest id if guest is trying to register as a user."
+                },
+                "userName": {
+                  "type": "string",
+                  "description": "This is the optional field"
+                }
+              },
+              "required": [
+                "name",
+                "email",
+                "password"
+              ]
+            }
+          }
+        },
+        "responses":{
+          "201": {
+            "description": "User registered successfull!"
+          }
+        }
+      }
+    },
     "/api/upload": {
       "post": {
         "tags": [
