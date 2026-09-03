@@ -47,11 +47,21 @@ const createTablesQuery = `
       created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS password_resets (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      email VARCHAR(255) NOT NULL,
+      otp_hash VARCHAR(255) NOT NULL,
+      is_used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP WITH TIME ZONE NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_docs_user_id ON documents(user_id);
   CREATE INDEX IF NOT EXISTS idx_docs_guest_id ON documents(guest_id);
   CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chat_sessions(user_id);
   CREATE INDEX IF NOT EXISTS idx_chats_guest_id ON chat_sessions(guest_id);
   CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
+  CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets(email);
 `;
 
 export const initializeDatabase = async () => {

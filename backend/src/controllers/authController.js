@@ -4,6 +4,7 @@ import { configDotenv } from 'dotenv';
 import validator from '../utils/validator.js';
 import bcrypt from 'bcrypt';
 import pool from '../config/db.js';
+import { sendOtpEmail } from '../services/emailService.js';
 
 configDotenv();
 
@@ -161,4 +162,56 @@ export const login = async (req, res) => {
         });
     }
 
+}
+
+
+// Forgot password
+export const forgotPassword = async(req, res) => {
+    try {
+        const { email } = req.body;
+        const validationRules = {
+            email: 'required|email'
+        };
+
+        const validationResult = validator(req.body, validationRules);
+
+        if(validationResult.fails()){
+            return res.status(400).json({
+                status: false,
+                message: 'Validataion Failed',
+                details: validationResult.errors.all()
+            });
+        }
+
+        // Check for the existing otp
+        const userCheck = await pool.query(`SELECT id FROM users WHERE email = $1`, [email]);
+        if(userCheck.rows.length === 0){
+            return res.status(200).json({
+                status: true,
+                message: 'If the email exists, an OTP has been sent.'
+            });
+        }
+
+        // Generate otp
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate hashed otp
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashOtp = await bcrypt.hash(otp, salt);
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        await pool.query(`INSERT INTO password_resets (email, otp_hash, expires_at) VALUES ($1, $2, $3)`, [email, hashOtp, expiresAt]);
+
+        await sendOtpEmail(email, otp);
+
+        return res.status(200).json({
+            status: true,
+            message: 'If the email exists, an OTP has been sent.'
+        });
+
+    } catch (err) {
+        console.error('[Forgot Password Error]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Failed to send OTP'
+        });
+    }
 }
