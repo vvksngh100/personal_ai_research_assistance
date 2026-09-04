@@ -151,3 +151,39 @@ export const deleteDocument = async (req, res) => {
         });
     }
 }
+
+// GET List of the documents
+export const getDocuments = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const guestId = req.guest?.id;
+
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, parseInt(req.query.limit) || 10);
+
+        const offset = (page - 1) * limit;
+
+        const countResult = await pool.query(`SELECT COUNT(*) FROM documents WHERE (user_id = $1 OR guest_id = $2)`, [userId, guestId]);
+
+        const docResult = await pool.query(`SELECT id, file_name, file_size_bytes, mime_type, status, created_at FROM documents WHERE 
+            (user_id = $1 OR guest_id = $2) ORDER BY created_at DESC LIMIT $3 OFFSET $4`, [userId, guestId, limit, offset]);
+
+        return res.status(200).json({
+            status: true,
+            pagination: {
+                total: countResult.rows[0].count,
+                page, 
+                limit,
+                totalPages: Math.ceil(countResult.rows[0].count / limit)
+            },
+            documents: docResult.rows,
+            message: 'Documents fetched successfully'
+        })
+    } catch (err) {
+        console.error('[Document Fetch Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Something went wrong'
+        });
+    }
+}
