@@ -70,7 +70,14 @@ if (fs.existsSync(outputFile)) {
           }
 
           // Auto-attach bearerAuth security to protected endpoints
-          const publicRoutes = ['/', '/api/auth/guest-id', '/api/auth/register', '/api/auth/login'];
+          const publicRoutes = [
+            '/',
+            '/api/auth/guest-id',
+            '/api/auth/register',
+            '/api/auth/login',
+            '/api/auth/forgot-password',
+            '/api/auth/verify-otp'
+          ];
           if (!publicRoutes.includes(routePath)) {
             if (!operation.security) {
               operation.security = [{ bearerAuth: [] }];

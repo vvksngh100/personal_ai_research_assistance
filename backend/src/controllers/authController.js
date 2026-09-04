@@ -119,23 +119,23 @@ export const login = async (req, res) => {
         const userQuery = `SELECT * FROM users where email = $1`;
         const userData = await pool.query(userQuery, [email]);
         const loggedInUser = userData.rows[0];
-        if(!loggedInUser){
+        if (!loggedInUser) {
             return res.status(400).json({
                 status: false,
                 message: 'You have entered the wrong credentials.'
             });
         }
-        
+
         const isMatched = await bcrypt.compare(password, loggedInUser.password_hash);
 
-        if(isMatched){
+        if (isMatched) {
             const payload = {
                 id: loggedInUser.id,
                 name: loggedInUser.name,
                 email: loggedInUser.email,
             };
 
-            const token = jwt.sign(payload, process.env.JWT_SECRET, {expiresIn: process.env.JWT_EXPIRES});
+            const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES });
 
             return res.status(200).json({
                 status: true,
@@ -166,7 +166,7 @@ export const login = async (req, res) => {
 
 
 // Forgot password
-export const forgotPassword = async(req, res) => {
+export const forgotPassword = async (req, res) => {
     try {
         const { email } = req.body;
         const validationRules = {
@@ -175,7 +175,7 @@ export const forgotPassword = async(req, res) => {
 
         const validationResult = validator(req.body, validationRules);
 
-        if(validationResult.fails()){
+        if (validationResult.fails()) {
             return res.status(400).json({
                 status: false,
                 message: 'Validataion Failed',
@@ -185,7 +185,7 @@ export const forgotPassword = async(req, res) => {
 
         // Check for the existing otp
         const userCheck = await pool.query(`SELECT id FROM users WHERE email = $1`, [email]);
-        if(userCheck.rows.length === 0){
+        if (userCheck.rows.length === 0) {
             return res.status(200).json({
                 status: true,
                 message: 'If the email exists, an OTP has been sent.'
@@ -212,6 +212,183 @@ export const forgotPassword = async(req, res) => {
         return res.status(500).json({
             status: false,
             message: 'Failed to send OTP'
+        });
+    }
+}
+
+// Verify OTP
+export const verifyOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        const validationRule = {
+            email: 'required|email',
+            otp: 'required'
+        };
+
+        const validationResult = validator(req.body, validationRule);
+
+        if (validationResult.fails()) {
+            return res.status(400).json({
+                status: false,
+                message: 'Validation Failed',
+                details: validationResult.errors.all()
+            });
+        }
+
+        const queryResult = await pool.query(`SELECT * from password_resets WHERE email = $1 ORDER BY created_at DESC LIMIT 1`, [email]);
+        const otpData = queryResult.rows[0];
+
+        if(!otpData){
+            return res.status(400).json({
+                status: false,
+                message: 'No OTP has been found for this email or it has expired.'
+            });
+        }
+        if (otpData.is_used || (new Date(otpData.expires_at).getTime() < Date.now())) {
+            return res.status(400).json({
+                status: false,
+                message: 'OTP was used or has expired.'
+            });
+        }
+
+        const isMatched = await bcrypt.compare(otp, otpData.otp_hash);
+        if (isMatched) {
+            await pool.query(`UPDATE password_resets SET is_used = TRUE WHERE id = $1`, [otpData.id]);
+            const token = jwt.sign({ email: otpData.email, purpose: 'password_reset' }, process.env.JWT_SECRET, { expiresIn: '10m' });
+            return res.status(200).json({
+                status: true,
+                message: 'OTP verified successfully',
+                token
+            });
+        }
+
+        res.status(400).json({
+            status: false,
+            message: 'Wrong OTP',
+        });
+    } catch (err) {
+        console.error('[OTP Veryfication Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Something Went Wrong'
+        });
+    }
+}
+
+
+// Reset password
+export const resetPassword = async(req, res) => {
+    try {
+        const authHeader = req.headers.authorization;
+        if(!authHeader || !authHeader.startsWith('Bearer ')){
+            return res.status(401).json({
+                status: false,
+                message: 'Unauthorized'
+            })
+        }
+        const token = authHeader.split(' ')[1];
+
+        let decoded;
+        try {            
+            decoded = jwt.verify(token, process.env.JWT_SECRET);
+        } catch (err) {
+            return res.status(401).json({
+                status: false,
+                message: 'Unauthorized'
+            });
+        }
+        const email = decoded.email;
+        if(decoded.purpose !== 'password_reset' || !email){
+            return res.status(400).json({
+                status: false,
+                message: 'Token Varyfication Failed'
+            });
+        }
+
+        const {newPassword} = req.body;
+
+        const validationRule = {
+            newPassword: 'required'
+        };
+
+        const validationResult = validator(req.body, validationRule);
+
+        if(validationResult.fails()){
+            return res.status(400).json({
+                status: false,
+                message: 'Validation Failed',
+                details: validationResult.errors.all()
+            });
+        }
+
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        await pool.query(`UPDATE users SET password_hash = $1, recver = COALESCE(recver, 0) + 1, updated_at = NOW() WHERE email = $2`, [hashedPassword, email]);
+        await pool.query(`DELETE FROM password_resets WHERE email = $1`, [email]);
+
+        return res.status(200).json({
+            status: true,
+            message: 'Password has been reset successfully. Please login.'
+        })
+    } catch (err) {
+        console.error('[Password Reset Failed]: ',err);
+        return res.status(500).json({
+            status: false,
+            message: 'Something Went Wrong'
+        });
+    }
+}
+
+// Update password
+export const updatePassword = async(req, res) => {
+    try {
+        const {oldPassword, newPassword} = req.body;
+        const userId = req.user?.id;
+
+        const validationRule = {
+            oldPassword: 'required',
+            newPassword: 'required'
+        };
+        const validationResult = validator(req.body, validationRule);
+        if(validationResult.fails()){
+            return res.status(400).json({
+                status: false,
+                message: 'Validation Failed'
+            });
+        }
+
+        const queryResult = await pool.query(`SELECT * FROM users where id = $1`, [userId]);
+        if(queryResult.rows.length === 0){
+            return res.status(401).json({
+                status: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        const userData = queryResult.rows[0];
+        const isMatched = await bcrypt.compare(oldPassword, userData.password_hash);
+        if(!isMatched){
+            return res.status(400).json({
+                status: false,
+                message: 'Incorrect Credentials'
+            });
+        }
+
+        const salt = await bcrypt.genSalt(saltRounds);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+        await pool.query(`UPDATE users SET password_hash = $1 WHERE id = $2`, [hashedPassword, userId]);
+
+        return res.status(200).json({
+            status: true,
+            message: 'Password updated successfully'
+        });
+    } catch (err) {
+        console.error('[Password Update Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Something Went Wrong'
         });
     }
 }
