@@ -392,3 +392,31 @@ export const updatePassword = async(req, res) => {
         });
     }
 }
+
+// Profile
+export const profile = async (req, res) => {
+    try {
+        const userId = req.user?.id;
+        const queryResult = await pool.query(`SELECT id, name, username, email FROM users WHERE id = $1`, [userId]);
+        if(queryResult.rows.length === 0){
+            return res.status(401).json({
+                status: false,
+                message: 'Unauthorized'
+            });
+        }
+
+        const user = queryResult.rows[0];
+
+        return res.status(200).json({
+            status: true,
+            message: 'Profile details fetched successfully',
+            user
+        });
+    } catch (err) {
+        console.error('[Profile Error]: ', err)
+        return res.status(500).json({
+            status: false,
+            message: 'Something Went Wrong'
+        });
+    }
+}
