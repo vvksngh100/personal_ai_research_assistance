@@ -109,3 +109,45 @@ export const uploadDocument = async (req, res) => {
         return res.status(500).json({ error: 'Failed to process and vectorize document' });
     }
 };
+
+// DELETE Document
+export const deleteDocument = async (req, res) => {
+    try {
+        const documentId = req.params.id;
+        const userId = req.user?.id;
+        const guestId = req.guest?.id;
+
+        const docResult = await pool.query(`SELECT id, pinecone_namespace FROM documents WHERE id = $1 AND (user_id = $2 OR guest_id = $3)`, [documentId, userId, guestId]);
+
+        if(docResult.rows.length === 0){
+            return res.status(404).json({
+                status: false,
+                message: 'Document not found or access denied'
+            });
+        }
+
+        const doc = docResult.rows[0];
+
+        if(doc.pinecone_namespace){
+            try {
+                const index = getPineconeIndex();
+                await index.namespace(doc.pinecone_namespace).deleteAll();
+            } catch (err) {
+                console.warn(`[DeleteDoc] Pinecone skipped/failed `, err.message);
+            }
+        }
+
+        await pool.query(`DELETE FROM documents WHERE id = $1`, [documentId]);
+
+        return res.status(200).json({
+            status: true,
+            message: 'Document deleted successfully'
+        })
+    } catch (err) {
+        console.error('[Document Delete Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Somethine went wrong'
+        });
+    }
+}
