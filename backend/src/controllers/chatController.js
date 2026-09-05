@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/db.js';
+import validator from '../utils/validator.js';
 import { retrieveContext, buildGroundedPrompt } from '../services/ragService.js';
 import { generateCompletion, generateStream } from '../services/geminiService.js';
 
@@ -202,21 +203,56 @@ export const sendMessage = async (req, res) => {
 // Retrieves all chat sessions associated with a specific document.
 export const getChatSessions = async (req, res) => {
     try {
-        const { documentId } = req.params;
         const userId = req.user ? req.user.id : null;
         const guestId = req.guest ? req.guest.guest_id : null;
+        const { cursor, documentId, search } = req.query;
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit)) || 15);
 
-        const sessionsQuery = `
-            SELECT id, title, created_at
-            FROM chat_sessions
-            WHERE document_id = $1 AND (user_id = $2 OR guest_id = $3)
-            ORDER BY created_at DESC;
+        // Build Query
+        const queryParams = [userId, guestId];
+        let sessionsQuery = `
+            SELECT cs.id, cs.title, cs.document_id, cs.created_at, d.file_name
+            FROM chat_sessions cs
+            LEFT JOIN documents d ON cs.document_id = d.id
+            WHERE (cs.user_id = $1 OR cs.guest_id = $2)
         `;
-        const result = await pool.query(sessionsQuery, [documentId, userId, guestId]);
+
+        if (documentId) {
+            queryParams.push(documentId);
+            sessionsQuery += ` AND cs.document_id = $${queryParams.length}`;
+        }
+
+        if (search && search.trim()) {
+            queryParams.push(`%${search.trim()}%`);
+            sessionsQuery += ` AND (cs.title ILIKE $${queryParams.length} OR d.file_name ILIKE $${queryParams.length})`;
+        }
+
+
+        if (cursor) {
+            const cursorDate = new Date(cursor);
+            if (isNaN(cursorDate.getTime())) {
+                return res.status(400).json({ error: 'Invalid cursor timestamp format' });
+            }
+            queryParams.push(cursorDate);
+            sessionsQuery += ` AND cs.created_at < $${queryParams.length}`;
+        }
+
+        queryParams.push(limit + 1);
+        sessionsQuery += ` ORDER BY cs.created_at DESC LIMIT $${queryParams.length}`;
+
+        const queryResult = await pool.query(sessionsQuery, queryParams);
+
+        const hasMore = queryResult.rows.length > limit;
+        const sessions = hasMore ? queryResult.rows.slice(0, limit) : queryResult.rows;
+        const nextCursor = hasMore ? sessions[sessions.length - 1].created_at : null;
 
         return res.status(200).json({
-            document_id: documentId,
-            sessions: result.rows
+            status: true,
+            sessions,
+            pagination: {
+                hasMore,
+                nextCursor,
+            }
         });
     } catch (error) {
         console.error('[ChatController] Error fetching sessions:', error);
@@ -224,10 +260,12 @@ export const getChatSessions = async (req, res) => {
     }
 };
 
-// Retrieves all messages within a specific chat session.
+// Retrieves messages within a specific chat session with cursor pagination.
 export const getChatMessages = async (req, res) => {
     try {
         const { sessionId } = req.params;
+        const { cursor } = req.query;
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit)) || 20);
         const userId = req.user ? req.user.id : null;
         const guestId = req.guest ? req.guest.guest_id : null;
 
@@ -241,17 +279,42 @@ export const getChatMessages = async (req, res) => {
             return res.status(404).json({ error: 'Chat session not found or access denied' });
         }
 
-        const messagesQuery = `
+        const queryParams = [sessionId];
+        let messagesQuery = `
             SELECT id, role, content, metadata, created_at
             FROM messages
             WHERE session_id = $1
-            ORDER BY created_at ASC;
         `;
-        const result = await pool.query(messagesQuery, [sessionId]);
+
+        if (cursor) {
+            const cursorDate = new Date(cursor);
+            if (isNaN(cursorDate.getTime())) {
+                return res.status(400).json({ error: 'Invalid cursor timestamp format' });
+            }
+            queryParams.push(cursorDate);
+            messagesQuery += ` AND created_at < $${queryParams.length}`;
+        }
+
+        queryParams.push(limit + 1);
+        messagesQuery += ` ORDER BY created_at DESC LIMIT $${queryParams.length}`;
+
+        const result = await pool.query(messagesQuery, queryParams);
+
+        const hasMore = result.rows.length > limit;
+        const slicedRows = hasMore ? result.rows.slice(0, limit) : result.rows;
+        const nextCursor = hasMore ? slicedRows[slicedRows.length - 1].created_at : null;
+
+        // Reverse to return in natural chronological order (oldest to newest) for chat rendering
+        const messages = slicedRows.reverse();
 
         return res.status(200).json({
+            status: true,
             session: sessionCheck.rows[0],
-            messages: result.rows
+            messages,
+            pagination: {
+                hasMore,
+                nextCursor,
+            }
         });
     } catch (error) {
         console.error('[ChatController] Error fetching messages:', error);
@@ -270,7 +333,7 @@ export const deleteChatSession = async (req, res) => {
         const result = await pool.query(`DELETE FROM chat_sessions 
             WHERE id = $1 AND (user_id = $2 OR guest_id = $3) RETURNING id`, [sessionId, userId, guestId]);
 
-        if(result.rows.length === 0){
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 status: false,
                 message: 'Chat session not found or access denied.'
@@ -296,7 +359,7 @@ export const updateChatSession = async (req, res) => {
         const sessionId = req.params.sessionId;
         const userId = req.user?.id;
         const guestId = req.guest?.id;
-        const {sessionTitle} = req.body;
+        const { sessionTitle } = req.body;
 
         const validationRule = {
             sessionTitle: 'required|string'
@@ -304,7 +367,7 @@ export const updateChatSession = async (req, res) => {
 
         const validationResult = validator(req.body, validationRule);
 
-        if(validationResult.fails()){
+        if (validationResult.fails()) {
             return res.status(400).json({
                 status: false,
                 message: 'Validation Failed',
@@ -314,9 +377,9 @@ export const updateChatSession = async (req, res) => {
 
         const queryResult = await pool.query(`UPDATE chat_sessions 
             SET title = $1 
-            WHERE id = $2 AND (user_id = $3 OR guest_id = $4) RETURNING id`, [sessionTitle, sessionId, userId, guestId]);
+            WHERE id = $2 AND (user_id = $3 OR guest_id = $4) RETURNING id, title, document_id, created_at`, [sessionTitle, sessionId, userId, guestId]);
 
-        if(queryResult.rows.length === 0){
+        if (queryResult.rows.length === 0) {
             return res.status(404).json({
                 status: false,
                 message: 'Chat session not found or access denied',

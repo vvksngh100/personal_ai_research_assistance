@@ -62,6 +62,9 @@ const createTablesQuery = `
   CREATE INDEX IF NOT EXISTS idx_chats_guest_id ON chat_sessions(guest_id);
   CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
   CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets(email);
+  CREATE INDEX IF NOT EXISTS idx_chats_user_created ON chat_sessions(user_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_chats_guest_created ON chat_sessions(guest_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at DESC);
 `;
 
 export const initializeDatabase = async () => {

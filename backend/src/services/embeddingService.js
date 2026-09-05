@@ -27,15 +27,39 @@ export const generateEmbedding = async (text) => {
 };
 
 /**
- * Generates embeddings for an array of text chunks.
+ * Generates embeddings for an array of text chunks using concurrent mini-batches.
+ * Instead of 50 serial iterations, processes 8 chunks concurrently with Promise.all.
+ * 
  * @param {string[]} chunks
+ * @param {number} [batchSize=8]
  * @returns {Promise<Array<{ chunk: string, embedding: number[] }>>}
  */
-export const generateBatchEmbeddings = async (chunks) => {
+export const generateBatchEmbeddings = async (chunks, batchSize = 8) => {
     const results = [];
-    for (const chunk of chunks) {
-        const embedding = await generateEmbedding(chunk);
-        results.push({ chunk, embedding });
+
+    for (let i = 0; i < chunks.length; i += batchSize) {
+        const batch = chunks.slice(i, i + batchSize);
+        const batchPromises = batch.map(async (chunk) => {
+            const embedding = await generateEmbedding(chunk);
+            return { chunk, embedding };
+        });
+
+        const batchResults = await Promise.all(batchPromises);
+        results.push(...batchResults);
     }
+
     return results;
+};
+
+/**
+ * Pre-warms the embedding model on server startup to eliminate cold-start latency for the first user.
+ */
+export const warmUpEmbeddingModel = async () => {
+    try {
+        console.log('[Embeddings] Pre-warming embedding model...');
+        await generateEmbedding('warmup');
+        console.log('[Embeddings] Model warmed up and ready in memory.');
+    } catch (err) {
+        console.warn('[Embeddings] Pre-warm deferred:', err.message);
+    }
 };
