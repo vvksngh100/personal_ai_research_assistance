@@ -23,3 +23,13 @@ export const heavyOperationLimiter = rateLimit({
     },
     message: {error: 'You are doing that too often. Please slow down.'}
 }); 
+
+export const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5, 
+    standardHeaders: 'draft-8',
+    legacyHeaders: false,
+    message: {
+        error: 'Too many attempts from this IP, please try again after 15 minutes.'
+    }
+});

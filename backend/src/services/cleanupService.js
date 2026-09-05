@@ -22,6 +22,10 @@ export const cleanupExpiredGuestData = async (ttlHours = 1) => {
                 await pool.query(deleteQuery, [doc.id]);
             }
         }
+
+        await pool.query(`DELETE FROM password_resets WHERE
+            expires_at < NOW() OR is_used = TRUE`);
+        console.log('[Cleanup] Expired password reset records purged.');
     } catch (err) {
         console.error('[CleanupService Error]: ', err.message);
     }
