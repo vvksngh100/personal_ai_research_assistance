@@ -11,7 +11,6 @@ export const uploadDocument = async (req, res) => {
             return res.status(400).json({ error: 'No PDF file uploaded' });
         }
 
-        // Determine ownership
         const userId = req.user ? req.user.id : null;
         const guestId = req.guest ? req.guest.guest_id : null;
 
@@ -119,7 +118,7 @@ export const deleteDocument = async (req, res) => {
 
         const docResult = await pool.query(`SELECT id, pinecone_namespace FROM documents WHERE id = $1 AND (user_id = $2 OR guest_id = $3)`, [documentId, userId, guestId]);
 
-        if(docResult.rows.length === 0){
+        if (docResult.rows.length === 0) {
             return res.status(404).json({
                 status: false,
                 message: 'Document not found or access denied'
@@ -128,7 +127,7 @@ export const deleteDocument = async (req, res) => {
 
         const doc = docResult.rows[0];
 
-        if(doc.pinecone_namespace){
+        if (doc.pinecone_namespace) {
             try {
                 const index = getPineconeIndex();
                 await index.namespace(doc.pinecone_namespace).deleteAll();
@@ -172,7 +171,7 @@ export const getDocuments = async (req, res) => {
             status: true,
             pagination: {
                 total: countResult.rows[0].count,
-                page, 
+                page,
                 limit,
                 totalPages: Math.ceil(countResult.rows[0].count / limit)
             },
