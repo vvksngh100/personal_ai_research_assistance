@@ -258,3 +258,81 @@ export const getChatMessages = async (req, res) => {
         return res.status(500).json({ error: 'Failed to retrieve messages' });
     }
 };
+
+
+// DELETE Chat Message
+export const deleteChatSession = async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        const userId = req.user?.id;
+        const guestId = req.guest?.id;
+
+        const result = await pool.query(`DELETE FROM chat_sessions 
+            WHERE id = $1 AND (user_id = $2 OR guest_id = $3) RETURNING id`, [sessionId, userId, guestId]);
+
+        if(result.rows.length === 0){
+            return res.status(404).json({
+                status: false,
+                message: 'Chat session not found or access denied.'
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            message: 'Record deleted successfully'
+        });
+    } catch (err) {
+        console.log('[Chat Session Deletion Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Internal server error'
+        });
+    }
+}
+
+// UPDATE Chat session
+export const updateChatSession = async (req, res) => {
+    try {
+        const sessionId = req.params.sessionId;
+        const userId = req.user?.id;
+        const guestId = req.guest?.id;
+        const {sessionTitle} = req.body;
+
+        const validationRule = {
+            sessionTitle: 'required|string'
+        };
+
+        const validationResult = validator(req.body, validationRule);
+
+        if(validationResult.fails()){
+            return res.status(400).json({
+                status: false,
+                message: 'Validation Failed',
+                details: validationResult.errors.all()
+            });
+        }
+
+        const queryResult = await pool.query(`UPDATE chat_sessions 
+            SET title = $1 
+            WHERE id = $2 AND (user_id = $3 OR guest_id = $4) RETURNING id`, [sessionTitle, sessionId, userId, guestId]);
+
+        if(queryResult.rows.length === 0){
+            return res.status(404).json({
+                status: false,
+                message: 'Chat session not found or access denied',
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            message: 'Chat session updated successfully',
+            session: queryResult.rows[0]
+        })
+    } catch (err) {
+        console.error('[Update Chat Session Failed]: ', err);
+        return res.status(500).json({
+            status: false,
+            message: 'Internal server error'
+        });
+    }
+}

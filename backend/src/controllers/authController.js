@@ -158,7 +158,7 @@ export const login = async (req, res) => {
         console.error('[Login Error]: ', err);
         return res.status(500).json({
             status: false,
-            message: 'Something went wrong',
+            message: 'Internal server error',
         });
     }
 
@@ -271,7 +271,7 @@ export const verifyOtp = async (req, res) => {
         console.error('[OTP Veryfication Failed]: ', err);
         return res.status(500).json({
             status: false,
-            message: 'Something Went Wrong'
+            message: 'Internal server error'
         });
     }
 }
@@ -336,7 +336,7 @@ export const resetPassword = async(req, res) => {
         console.error('[Password Reset Failed]: ',err);
         return res.status(500).json({
             status: false,
-            message: 'Something Went Wrong'
+            message: 'Internal server error'
         });
     }
 }
@@ -388,7 +388,7 @@ export const updatePassword = async(req, res) => {
         console.error('[Password Update Failed]: ', err);
         return res.status(500).json({
             status: false,
-            message: 'Something Went Wrong'
+            message: 'Internal server error'
         });
     }
 }
@@ -416,7 +416,7 @@ export const profile = async (req, res) => {
         console.error('[Profile Error]: ', err)
         return res.status(500).json({
             status: false,
-            message: 'Something Went Wrong'
+            message: 'Internal server error'
         });
     }
 }

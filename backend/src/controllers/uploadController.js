@@ -183,7 +183,7 @@ export const getDocuments = async (req, res) => {
         console.error('[Document Fetch Failed]: ', err);
         return res.status(500).json({
             status: false,
-            message: 'Something went wrong'
+            message: 'Internal server error'
         });
     }
 }
