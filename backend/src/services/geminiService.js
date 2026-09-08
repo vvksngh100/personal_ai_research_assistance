@@ -1,48 +1,65 @@
+import Groq from 'groq-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { configDotenv } from 'dotenv';
 
 configDotenv();
 
+let groqInstance = null;
 let genAIInstance = null;
 
-/**
- * Returns a singleton instance of GoogleGenerativeAI initialized with GEMINI_API_KEY.
- * Lazy initialization ensures process.env is fully loaded and allows dynamic key resolution.
- */
+const getGroq = () => {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return null;
+    if (!groqInstance) {
+        groqInstance = new Groq({ apiKey });
+    }
+    return groqInstance;
+};
+
 const getGenAI = () => {
     const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-        throw new Error('GEMINI_API_KEY is not configured in your .env file.');
-    }
+    if (!apiKey) return null;
     if (!genAIInstance) {
         genAIInstance = new GoogleGenerativeAI(apiKey);
     }
     return genAIInstance;
 };
 
-const getModelName = () => process.env.GEMINI_MODEL || 'gemini-3.6-flash';
-
 /**
  * Standard non-streaming completion for REST JSON responses.
- * 
- * @param {Object} options
- * @param {string} options.prompt - The formatted user query and context
- * @param {string} [options.systemInstruction] - Grounding guardrails and persona
- * @param {number} [options.temperature] - Generation temperature (default 0.2 for strict factual answers)
- * @returns {Promise<string>}
  */
 export const generateCompletion = async ({
     prompt,
     systemInstruction,
     temperature = 0.2
 }) => {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({
-        model: getModelName(),
-        systemInstruction,
-        generationConfig: {
-            temperature,
+    const groq = getGroq();
+    if (groq) {
+        const messages = [];
+        if (systemInstruction) {
+            messages.push({ role: 'system', content: systemInstruction });
         }
+        messages.push({ role: 'user', content: prompt });
+
+        const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+        const response = await groq.chat.completions.create({
+            model,
+            messages,
+            temperature
+        });
+
+        return response.choices[0]?.message?.content || '';
+    }
+
+    const genAI = getGenAI();
+    if (!genAI) {
+        throw new Error('Neither GROQ_API_KEY nor GEMINI_API_KEY is configured in your .env file.');
+    }
+    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction,
+        generationConfig: { temperature }
     });
 
     const result = await model.generateContent(prompt);
@@ -52,13 +69,6 @@ export const generateCompletion = async ({
 
 /**
  * Streaming completion for real-time Server-Sent Events (SSE).
- * 
- * @param {Object} options
- * @param {string} options.prompt - The formatted user query and context
- * @param {string} [options.systemInstruction] - Grounding guardrails and persona
- * @param {number} [options.temperature] - Generation temperature (default 0.2)
- * @param {function(string): void} options.onChunk - Callback invoked for each token chunk
- * @returns {Promise<string>} The full accumulated response text
  */
 export const generateStream = async ({
     prompt,
@@ -66,18 +76,48 @@ export const generateStream = async ({
     temperature = 0.2,
     onChunk
 }) => {
-    const genAI = getGenAI();
-    const model = genAI.getGenerativeModel({
-        model: getModelName(),
-        systemInstruction,
-        generationConfig: {
-            temperature,
+    const groq = getGroq();
+    if (groq) {
+        const messages = [];
+        if (systemInstruction) {
+            messages.push({ role: 'system', content: systemInstruction });
         }
+        messages.push({ role: 'user', content: prompt });
+
+        const model = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
+        const stream = await groq.chat.completions.create({
+            model,
+            messages,
+            temperature,
+            stream: true
+        });
+
+        let fullText = '';
+        for await (const chunk of stream) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            if (token) {
+                fullText += token;
+                if (onChunk) {
+                    onChunk(token);
+                }
+            }
+        }
+        return fullText;
+    }
+
+    const genAI = getGenAI();
+    if (!genAI) {
+        throw new Error('Neither GROQ_API_KEY nor GEMINI_API_KEY is configured in your .env file.');
+    }
+    const modelName = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+    const model = genAI.getGenerativeModel({
+        model: modelName,
+        systemInstruction,
+        generationConfig: { temperature }
     });
 
     const result = await model.generateContentStream(prompt);
     let fullText = '';
-
     for await (const chunk of result.stream) {
         const chunkText = chunk.text();
         if (chunkText) {
@@ -87,6 +127,5 @@ export const generateStream = async ({
             }
         }
     }
-
     return fullText;
 };
