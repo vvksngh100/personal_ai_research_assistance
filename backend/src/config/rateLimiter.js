@@ -5,14 +5,16 @@ export const globalRateLimiter = rateLimit({
     limit: 100,
     standardHeaders: 'draft-8',
     legacyHeaders: false,
-    message: {error: 'Too many requests, please try again later.'}
+    validate: { xForwardedForHeader: false },
+    message: { error: 'Too many requests, please try again later.' }
 });
 
 export const heavyOperationLimiter = rateLimit({
     windowMs: 60 * 1000,
     limit: 5,
+    validate: { xForwardedForHeader: false },
     keyGenerator: (req) => {
-        if(req.user && req.user.id){
+        if (req.user && req.user.id) {
             return `user_${req.user.id}`;
         }  
         if (req.guest && (req.guest.id || req.guest.guest_id)) {
@@ -21,7 +23,7 @@ export const heavyOperationLimiter = rateLimit({
 
         return ipKeyGenerator(req.ip);
     },
-    message: {error: 'You are doing that too often. Please slow down.'}
+    message: { error: 'You are doing that too often. Please slow down.' }
 }); 
 
 export const authLimiter = rateLimit({
@@ -29,6 +31,7 @@ export const authLimiter = rateLimit({
     limit: 5, 
     standardHeaders: 'draft-8',
     legacyHeaders: false,
+    validate: { xForwardedForHeader: false },
     message: {
         error: 'Too many attempts from this IP, please try again after 15 minutes.'
     }

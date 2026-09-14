@@ -34,6 +34,14 @@ export const chatService = {
     });
   },
 
+  // 3b. Rename Session
+  async updateSession(sessionId, sessionTitle) {
+    return await apiRequest(`/api/chat/sessions/${sessionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sessionTitle }),
+    });
+  },
+
   // 4. Real-time SSE Chat Stream Reader
   async streamMessage({ document_id, message, session_id, onSources, onToken, onDone, onError }) {
     const token = getToken();

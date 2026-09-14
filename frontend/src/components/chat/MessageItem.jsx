@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { User, Sparkles, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react';
 
 export default function MessageItem({ message, isStreaming = false }) {
@@ -64,15 +66,34 @@ export default function MessageItem({ message, isStreaming = false }) {
               </div>
             )}
 
-            {/* Answer Content */}
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            {/* Answer Content with Full GFM Table & HTML Support */}
+            <div className="markdown-body">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  table: ({ node, ...props }) => (
+                    <div className="table-responsive-wrapper">
+                      <table className="markdown-table" {...props} />
+                    </div>
+                  ),
+                  thead: ({ node, ...props }) => <thead className="markdown-thead" {...props} />,
+                  tbody: ({ node, ...props }) => <tbody className="markdown-tbody" {...props} />,
+                  tr: ({ node, ...props }) => <tr className="markdown-tr" {...props} />,
+                  th: ({ node, ...props }) => <th className="markdown-th" {...props} />,
+                  td: ({ node, ...props }) => <td className="markdown-td" {...props} />,
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
 
             {/* Streaming Cursor */}
             {isStreaming && <span className="streaming-cursor" />}
 
             {/* Copy Button Footer */}
             {!isStreaming && message.content && (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
                 <button
                   onClick={handleCopy}
                   style={{

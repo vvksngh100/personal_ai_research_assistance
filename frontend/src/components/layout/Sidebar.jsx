@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, lazy, Suspense } from 'react';
 import { 
   GraduationCap, 
   Plus, 
@@ -8,13 +8,19 @@ import {
   Sun, 
   Moon, 
   User, 
+  MoreVertical,
+  Pencil,
   Trash2, 
   LogOut,
-  X 
+  X
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useChat } from '../../context/ChatContext';
 import { useAuth } from '../../context/AuthContext';
+
+// Lazy-load session action modals on demand
+const RenameSessionModal = lazy(() => import('../chat/RenameSessionModal'));
+const DeleteSessionModal = lazy(() => import('../chat/DeleteSessionModal'));
 
 export default function Sidebar({ 
   isMobileOpen = false, 
@@ -29,10 +35,16 @@ export default function Sidebar({
     activeDocument,
     selectSession, 
     newChat, 
-    deleteSession,
     searchQuery,
     setSearchQuery 
   } = useChat();
+
+  // Dropdown menu state
+  const [activeMenuSessionId, setActiveMenuSessionId] = useState(null);
+
+  // Active session targets for modals
+  const [sessionToRename, setSessionToRename] = useState(null);
+  const [sessionToDelete, setSessionToDelete] = useState(null);
 
   // "New Research Chat" is enabled only if there's an active session or document
   const isNewChatEnabled = Boolean(activeDocument || activeSessionId);
@@ -47,6 +59,8 @@ export default function Sidebar({
     newChat();
     if (onCloseMobile) onCloseMobile();
   };
+
+
 
   return (
     <>
@@ -115,37 +129,80 @@ export default function Sidebar({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               {sessions.map((session) => {
                 const isActive = session.id === activeSessionId;
+                const isMenuOpen = activeMenuSessionId === session.id;
+
                 return (
                   <div
                     key={session.id}
-                    className={`session-item ${isActive ? 'active' : ''}`}
+                    className={`session-item ${isActive ? 'active' : ''} ${isMenuOpen ? 'menu-open' : ''}`}
                     onClick={() => handleSelect(session.id)}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    <div className="session-item-content">
                       <MessageSquare size={16} color={isActive ? 'var(--brand-primary)' : 'var(--text-secondary)'} />
-                      <div style={{ minWidth: 0 }}>
-                        <div className="session-title">
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div className="session-title" title={session.title || 'Untitled Session'}>
                           {session.title || 'Untitled Session'}
                         </div>
                         {session.file_name && (
-                          <div className="session-doc-name">
+                          <div className="session-doc-name" title={session.file_name}>
                             <FileText size={12} />
-                            {session.file_name}
+                            <span>{session.file_name}</span>
                           </div>
                         )}
                       </div>
                     </div>
 
-                    <button
-                      className="btn-icon-delete"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteSession(session.id);
-                      }}
-                      title="Delete Session"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="session-menu-wrapper" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        className="btn-session-dots"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuSessionId(prev => (prev === session.id ? null : session.id));
+                        }}
+                        title="Session options"
+                        aria-label="Session options"
+                      >
+                        <MoreVertical size={16} />
+                      </button>
+
+                      {isMenuOpen && (
+                        <>
+                          <div 
+                            className="session-dropdown-backdrop" 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveMenuSessionId(null);
+                            }} 
+                          />
+                          <div className="session-dropdown-menu">
+                            <button
+                              type="button"
+                              className="session-dropdown-item"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuSessionId(null);
+                                setSessionToRename(session);
+                              }}
+                            >
+                              <Pencil size={14} />
+                              <span>Rename</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="session-dropdown-item delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuSessionId(null);
+                                setSessionToDelete(session);
+                              }}
+                            >
+                              <Trash2 size={14} />
+                              <span>Delete</span>
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -190,6 +247,27 @@ export default function Sidebar({
           </div>
         </div>
       </aside>
+
+      {/* Modals lazy-loaded on-demand */}
+      {sessionToRename && (
+        <Suspense fallback={null}>
+          <RenameSessionModal
+            isOpen={Boolean(sessionToRename)}
+            session={sessionToRename}
+            onClose={() => setSessionToRename(null)}
+          />
+        </Suspense>
+      )}
+
+      {sessionToDelete && (
+        <Suspense fallback={null}>
+          <DeleteSessionModal
+            isOpen={Boolean(sessionToDelete)}
+            session={sessionToDelete}
+            onClose={() => setSessionToDelete(null)}
+          />
+        </Suspense>
+      )}
     </>
   );
 }

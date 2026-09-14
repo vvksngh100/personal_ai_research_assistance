@@ -2,15 +2,17 @@ import jwt from 'jsonwebtoken';
 
 export const identifyUser = (req, res, next) => {
     const authHeader = req.headers.authorization;
-    console.log(authHeader);
-    // console.log(req);
-    // console.log(req.headers);
     
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Authorization token required' });
+    let token = null;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+        token = authHeader.split(' ')[1];
+    } else if (req.query && req.query.token) {
+        token = req.query.token;
     }
 
-    const token = authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ error: 'Authorization token required' });
+    }
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);

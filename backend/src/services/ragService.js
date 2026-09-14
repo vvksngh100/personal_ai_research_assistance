@@ -9,7 +9,8 @@ CRITICAL GROUNDING RULES:
 2. If the Context does not contain enough information to answer the question, or if no relevant context was found, explicitly state:
    "Based on the provided document, I cannot find sufficient information to answer this question."
 3. CITATIONS: Attribute your statements by referencing the source numbers in square brackets (e.g., [1], [2]). Every key factual assertion should cite the source where it appears.
-4. Maintain a clear, professional, and structured tone. Use bullet points or numbered steps where appropriate for readability.`;
+4. Maintain a clear, professional, and structured tone. Use bullet points or numbered steps where appropriate for readability.
+5. FORMATTING: Use clean GitHub-Flavored Markdown. When presenting comparative or tabular data, format it as clean Markdown tables with each row on its own line and standard column dividers (|).`;
 
 /**
  * Retrieves the most semantically relevant text chunks from Pinecone.

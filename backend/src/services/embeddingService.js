@@ -1,65 +1,73 @@
-import { pipeline } from '@xenova/transformers';
+import { Worker } from 'node:worker_threads';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 
-class EmbeddingPipeline {
-    static instance = null;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const workerPath = path.resolve(__dirname, '../workers/embeddingWorker.js');
 
-    static async getInstance() {
-        if (!this.instance) {
-            // Loads feature-extraction pipeline using a 768-dimension model to match Pinecone
-            this.instance = await pipeline('feature-extraction', 'Xenova/bge-base-en-v1.5');
-        }
-        return this.instance;
+const worker = new Worker(workerPath);
+
+const pendingTasks = new Map();
+
+worker.on('message', (msg) => {
+    const task = pendingTasks.get(msg.id);
+    if (!task) return;
+
+    if (msg.type === 'PROGRESS') {
+        if (task.onProgress) task.onProgress(msg);
+        return;
     }
-}
+
+    if (msg.status === 'SUCCESS') {
+        pendingTasks.delete(msg.id);
+        task.resolve(msg.data);
+    } else if (msg.status === 'ERROR') {
+        pendingTasks.delete(msg.id);
+        task.reject(new Error(msg.error));
+    }
+});
+
+worker.on('error', (err) => {
+    console.error('[EmbeddingWorker] Fatal thread error:', err);
+});
 
 /**
  * Generates an embedding vector for a single string.
+ * Used by RAG / Chat retrieval to vectorize incoming user questions.
  * @param {string} text
  * @returns {Promise<number[]>} 768-dimensional float array
  */
-export const generateEmbedding = async (text) => {
-    const extractor = await EmbeddingPipeline.getInstance();
-    
-    // pooling: 'mean', normalize: true are standard for cosine similarity
-    const output = await extractor(text, { pooling: 'mean', normalize: true });
-    
-    return Array.from(output.data);
+export const generateEmbedding = (text) => {
+    return new Promise((resolve, reject) => {
+        const id = crypto.randomUUID();
+        pendingTasks.set(id, { resolve, reject });
+        worker.postMessage({ id, type: 'EMBED_SINGLE', text });
+    });
 };
 
 /**
- * Generates embeddings for an array of text chunks using concurrent mini-batches.
- * Instead of 50 serial iterations, processes 8 chunks concurrently with Promise.all.
+ * Generates embeddings for an array of text chunks using the isolated worker thread.
+ * Keeps the Express event loop 100% free and responsive during large PDF uploads.
  * 
  * @param {string[]} chunks
- * @param {number} [batchSize=8]
+ * @param {number} [batchSize=16]
+ * @param {Function} [onProgress] - Optional callback receiving { processed, total, percentage }
  * @returns {Promise<Array<{ chunk: string, embedding: number[] }>>}
  */
-export const generateBatchEmbeddings = async (chunks, batchSize = 8) => {
-    const results = [];
-
-    for (let i = 0; i < chunks.length; i += batchSize) {
-        const batch = chunks.slice(i, i + batchSize);
-        const batchPromises = batch.map(async (chunk) => {
-            const embedding = await generateEmbedding(chunk);
-            return { chunk, embedding };
-        });
-
-        const batchResults = await Promise.all(batchPromises);
-        results.push(...batchResults);
-    }
-
-    return results;
+export const generateBatchEmbeddings = (chunks, batchSize = 16, onProgress = null) => {
+    return new Promise((resolve, reject) => {
+        const id = crypto.randomUUID();
+        pendingTasks.set(id, { resolve, reject, onProgress });
+        worker.postMessage({ id, type: 'EMBED_BATCH', chunks, batchSize });
+    });
 };
 
 /**
- * Pre-warms the embedding model on server startup to eliminate cold-start latency for the first user.
+ * Pre-warms the quantized model on server startup inside the worker thread.
  */
-export const warmUpEmbeddingModel = async () => {
-    try {
-        console.log('[Embeddings] Pre-warming embedding model...');
-        await generateEmbedding('warmup');
-        console.log('[Embeddings] Model warmed up and ready in memory.');
-    } catch (err) {
-        console.warn('[Embeddings] Pre-warm deferred:', err.message);
-    }
+export const warmUpEmbeddingModel = () => {
+    const id = crypto.randomUUID();
+    worker.postMessage({ id, type: 'WARMUP' });
 };

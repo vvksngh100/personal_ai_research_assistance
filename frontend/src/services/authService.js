@@ -19,10 +19,10 @@ export const authService = {
   },
 
   // 3. Login existing user
-  async login({ email, password }) {
+  async login({ email, password, guestId }) {
     const data = await apiRequest('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, guestId }),
     });
     if (data.token) setToken(data.token);
     return data;
@@ -36,5 +36,32 @@ export const authService = {
   // 5. Logout
   logout() {
     removeToken();
+  },
+
+  // 6. Request OTP for Forgot Password
+  async forgotPassword(email) {
+    return await apiRequest('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  // 7. Verify OTP
+  async verifyOtp({ email, otp }) {
+    return await apiRequest('/api/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    });
+  },
+
+  // 8. Reset Password using the token received from verifyOtp
+  async resetPassword({ resetToken, newPassword }) {
+    return await apiRequest('/api/auth/reset-password', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${resetToken}`,
+      },
+      body: JSON.stringify({ newPassword }),
+    });
   }
 };

@@ -14,6 +14,7 @@ export const ChatProvider = ({ children }) => {
   
   // UI States
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -53,23 +54,71 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
-  // 3. Upload a new PDF document
+  // 3. Upload a new PDF document with SSE progress tracking
   const uploadDocument = async (file) => {
     setIsUploading(true);
+    setUploadProgress({ percentage: 5, stage: 'embedding', message: 'Starting document processing...' });
     try {
       const result = await documentService.upload(file);
-      const doc = {
-        id: result.document_id,
-        name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
-        status: 'ready'
-      };
-      setActiveDocument(doc);
-      setActiveSessionId(null);
-      setMessages([]);
+      const documentId = result.document_id || result.document?.id;
+      const initialSessionId = result.session_id || null;
+
+      if (initialSessionId) {
+        setActiveSessionId(initialSessionId);
+      }
+
+      // Immediately refresh sessions so the document/session shows up in the sidebar list
+      loadSessions();
+
+      // If already ready (immediate response fallback)
+      if (result.status === 'ready' || result.document?.status === 'ready') {
+        const doc = {
+          id: documentId,
+          name: file.name,
+          size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+          status: 'ready'
+        };
+        setActiveDocument(doc);
+        if (initialSessionId) setActiveSessionId(initialSessionId);
+        setMessages([]);
+        setUploadProgress(null);
+        await loadSessions();
+        return doc;
+      }
+
+      // Wait for background embedding completion via Server-Sent Events (SSE)
+      const doc = await new Promise((resolve, reject) => {
+        documentService.subscribeToProgress(documentId, {
+          onProgress: (data) => {
+            setUploadProgress(data);
+          },
+          onReady: async () => {
+            const completedDoc = {
+              id: documentId,
+              name: file.name,
+              size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+              status: 'ready'
+            };
+            setActiveDocument(completedDoc);
+            if (initialSessionId) setActiveSessionId(initialSessionId);
+            setMessages([]);
+            setUploadProgress(null);
+            await loadSessions();
+            resolve(completedDoc);
+          },
+          onError: (err) => {
+            setUploadProgress(null);
+            reject(err);
+          }
+        });
+      });
+
+      await loadSessions();
       return doc;
     } finally {
       setIsUploading(false);
+      setUploadProgress(null);
+      loadSessions();
     }
   };
 
@@ -163,6 +212,13 @@ export const ChatProvider = ({ children }) => {
     }
   };
 
+  // 7. Rename a session
+  const renameSession = async (sessionId, newTitle) => {
+    const result = await chatService.updateSession(sessionId, newTitle);
+    setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, title: newTitle } : s));
+    return result;
+  };
+
   return (
     <ChatContext.Provider value={{
       sessions,
@@ -170,6 +226,7 @@ export const ChatProvider = ({ children }) => {
       activeDocument,
       messages,
       isUploading,
+      uploadProgress,
       isStreaming,
       searchQuery,
       setSearchQuery,
@@ -178,6 +235,7 @@ export const ChatProvider = ({ children }) => {
       sendMessage,
       newChat,
       deleteSession,
+      renameSession,
       loadSessions
     }}>
       {children}

@@ -100,7 +100,7 @@ export const register = async (req, res) => {
 // Login
 export const login = async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password, guestId } = req.body;
 
         const validationRules = {
             email: 'required|email',
@@ -129,6 +129,21 @@ export const login = async (req, res) => {
         const isMatched = await bcrypt.compare(password, loggedInUser.password_hash);
 
         if (isMatched) {
+            if (guestId) {
+                try {
+                    await pool.query(
+                        `UPDATE documents SET user_id = $1, guest_id = NULL WHERE guest_id = $2`,
+                        [loggedInUser.id, guestId]
+                    );
+                    await pool.query(
+                        `UPDATE chat_sessions SET user_id = $1, guest_id = NULL WHERE guest_id = $2`,
+                        [loggedInUser.id, guestId]
+                    );
+                } catch (migrateErr) {
+                    console.warn('[Login Guest Migration Warning]:', migrateErr.message);
+                }
+            }
+
             const payload = {
                 id: loggedInUser.id,
                 name: loggedInUser.name,

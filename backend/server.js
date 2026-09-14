@@ -16,6 +16,8 @@ const PORT = process.env.PORT || 3000;
 
 const app = express();
 
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
 
@@ -56,16 +58,35 @@ app.use((err, req, res, next) => {
     });
 });
 
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
     console.log(`Server is started at port ${PORT}`);
 
     startGuestCleanupJob();
     warmUpEmbeddingModel();
 
-    try {
-        const result = await query('SELECT NOW()');
-        console.log('Database is connected at: ', result.rows[0].now);
-    } catch (err) {
-        console.error('Database connection failed: ', err.message);
+    await connectToDatabase();
+
+    async function connectToDatabase(maxTries=5, initialDelay=1000){
+        for(let attempt = 1; attempt <= maxTries; attempt++){
+            try {
+                const result = await query('SELECT NOW()');
+                console.log('[Database Connect]: ', result.rows[0].now);
+                return true;
+            } catch (err) {
+                console.error(`[Database Connection Failed] (attempt ${attempt/maxTries}): `, err.message);
+            }
+
+            if(attempt === maxTries){
+                console.error(`[Retries Exausted]: All retry attempts exhausted. Exiting...`)
+                process.emit(1);
+            }
+
+            const delay = initialDelay * Math.pow(2, attempt - 1);
+            console.log(`[Retrying]: Retrying in ${delay}ms...`);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+        }
     }
 });
+
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 125000;

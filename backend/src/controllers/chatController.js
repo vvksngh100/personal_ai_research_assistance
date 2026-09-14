@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import pool from '../config/db.js';
 import validator from '../utils/validator.js';
+import { getPineconeIndex } from '../config/pinecone.js';
 import { retrieveContext, buildGroundedPrompt } from '../services/ragService.js';
 import { generateCompletion, generateStream } from '../services/geminiService.js';
 
@@ -23,8 +24,6 @@ export const sendMessage = async (req, res) => {
 
         const userId = req.user ? req.user.id : null;
         const guestId = req.guest ? req.guest.guest_id : null;
-        console.log('[GUESTID]: ', guestId);
-        console.log('[DOCUMENTID]: ', document_id);
 
         if (!userId && !guestId) {
             return res.status(401).json({ error: 'Unauthorized: missing user or guest identity' });
@@ -205,6 +204,24 @@ export const getChatSessions = async (req, res) => {
     try {
         const userId = req.user ? req.user.id : null;
         const guestId = req.guest ? req.guest.guest_id : null;
+
+        // Auto-heal: Ensure every document owned by the user/guest has at least one chat session
+        try {
+            await pool.query(
+                `INSERT INTO chat_sessions (user_id, guest_id, document_id, title)
+                 SELECT d.user_id, d.guest_id, d.id, d.file_name
+                 FROM documents d
+                 WHERE (($1::uuid IS NOT NULL AND d.user_id = $1::uuid) OR ($2::uuid IS NOT NULL AND d.guest_id = $2::uuid))
+                   AND d.status != 'failed'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM chat_sessions cs WHERE cs.document_id = d.id
+                   )`,
+                [userId, guestId]
+            );
+        } catch (healErr) {
+            console.warn('[Auto-heal sessions warning]:', healErr.message);
+        }
+
         const { cursor, documentId, search } = req.query;
         const limit = Math.min(50, Math.max(1, parseInt(req.query.limit)) || 15);
 
@@ -323,42 +340,89 @@ export const getChatMessages = async (req, res) => {
 };
 
 
-// DELETE Chat Message
+// DELETE Chat Session & Associated Document + Pinecone Vectors
 export const deleteChatSession = async (req, res) => {
     try {
         const sessionId = req.params.sessionId;
-        const userId = req.user?.id;
-        const guestId = req.guest?.id;
+        const userId = req.user?.id || null;
+        const guestId = req.guest?.guest_id || req.guest?.id || null;
 
-        const result = await pool.query(`DELETE FROM chat_sessions 
-            WHERE id = $1 AND (user_id = $2 OR guest_id = $3) RETURNING id`, [sessionId, userId, guestId]);
+        // 1. Fetch the chat session to verify ownership and find the associated document_id
+        const sessionResult = await pool.query(
+            `SELECT id, document_id FROM chat_sessions 
+             WHERE id = $1 AND (($2::uuid IS NOT NULL AND user_id = $2::uuid) OR ($3::uuid IS NOT NULL AND guest_id = $3::uuid))`,
+            [sessionId, userId, guestId]
+        );
 
-        if (result.rows.length === 0) {
+        if (sessionResult.rows.length === 0) {
             return res.status(404).json({
                 status: false,
                 message: 'Chat session not found or access denied.'
             });
         }
 
+        const { document_id: documentId } = sessionResult.rows[0];
+
+        // 2. If an associated document exists, clean up its Pinecone vectors and database entry
+        if (documentId) {
+            const siblingSessions = await pool.query(
+                `SELECT id FROM chat_sessions WHERE document_id = $1 AND id != $2`,
+                [documentId, sessionId]
+            );
+
+            // If this is the only session referencing this document (standard 1:1 UI flow):
+            if (siblingSessions.rows.length === 0) {
+                const docResult = await pool.query(
+                    `SELECT id, pinecone_namespace FROM documents WHERE id = $1`,
+                    [documentId]
+                );
+
+                if (docResult.rows.length > 0) {
+                    const doc = docResult.rows[0];
+                    if (doc.pinecone_namespace) {
+                        try {
+                            const index = getPineconeIndex();
+                            await index.namespace(doc.pinecone_namespace).deleteAll();
+                            console.log(`[DeleteChatSession] Wiped Pinecone namespace: ${doc.pinecone_namespace}`);
+                        } catch (pineconeErr) {
+                            console.warn(`[DeleteChatSession] Pinecone namespace delete skipped/failed:`, pineconeErr.message);
+                        }
+                    }
+
+                    // Deleting the document cascades and deletes chat_session and messages in PostgreSQL
+                    await pool.query(`DELETE FROM documents WHERE id = $1`, [documentId]);
+                    console.log(`[DeleteChatSession] Cleanly deleted document ${documentId} and cascaded session ${sessionId}`);
+
+                    return res.status(200).json({
+                        status: true,
+                        message: 'Chat session, document, and vector index deleted successfully'
+                    });
+                }
+            }
+        }
+
+        // 3. Fallback: If no document or other sessions still share the document, delete just the chat session
+        await pool.query(`DELETE FROM chat_sessions WHERE id = $1`, [sessionId]);
+
         return res.status(200).json({
             status: true,
-            message: 'Record deleted successfully'
+            message: 'Chat session deleted successfully'
         });
     } catch (err) {
-        console.log('[Chat Session Deletion Failed]: ', err);
+        console.error('[Chat Session Deletion Failed]: ', err);
         return res.status(500).json({
             status: false,
             message: 'Internal server error'
         });
     }
-}
+};
 
 // UPDATE Chat session
 export const updateChatSession = async (req, res) => {
     try {
         const sessionId = req.params.sessionId;
         const userId = req.user?.id;
-        const guestId = req.guest?.id;
+        const guestId = req.guest?.guest_id || req.guest?.id || null;
         const { sessionTitle } = req.body;
 
         const validationRule = {

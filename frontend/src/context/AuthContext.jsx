@@ -49,7 +49,8 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (credentials) => {
-    const data = await authService.login(credentials);
+    const guestId = isGuest ? user?.id : null;
+    const data = await authService.login({ ...credentials, guestId });
     setUser(data.user);
     setIsGuest(false);
     return data;
