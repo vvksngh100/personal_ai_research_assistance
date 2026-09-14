@@ -15,7 +15,20 @@
 **High-Performance Multi-Threaded RAG System with Local Quantized Embeddings & Dual-Lane QoS Scheduling**  
 _Engineered for zero event-loop starvation, 70% memory reduction, and crash-proof execution on resource-constrained cloud environments (512MB RAM)_
 
+<br />
+
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-00C7B7?style=for-the-badge&logo=vercel&logoColor=white)](#-live-deployments)
+[![API Docs](https://img.shields.io/badge/Swagger-Live%20API%20Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](#-live-deployments)
+
 </div>
+
+---
+
+### 🌐 Live Deployments
+
+> _Update these URLs once your deployment on Vercel and Render is complete:_
+> - **Frontend Web App (Vercel):** [https://your-frontend-app.vercel.app](https://your-frontend-app.vercel.app)
+> - **Backend API & Swagger UI (Render):** [https://your-backend-app.onrender.com/api-docs](https://your-backend-app.onrender.com/api-docs)
 
 ---
 
@@ -154,8 +167,8 @@ extractor = await pipeline('feature-extraction', 'Xenova/bge-base-en-v1.5', {
 
 #### The Problem Statement (The "Convoy Effect")
 In a naive First-In, First-Out (FIFO) queue:
-- **User A** uploads a 77-page dissertation (10MB, 343 chunks) $ightarrow$ Processing takes **~4 minutes**.
-- **User B** uploads a 1-page summary (50KB, 3 chunks) $ightarrow$ Actual work takes **1.5 seconds**, but User B is forced to wait behind User A for the full 4 minutes!
+- **User A** uploads a 77-page dissertation (10MB, 343 chunks) → Processing takes **~4 minutes**.
+- **User B** uploads a 1-page summary (50KB, 3 chunks) → Actual work takes **1.5 seconds**, but User B is forced to wait behind User A for the full 4 minutes!
 
 Running both large documents simultaneously in parallel would spike RAM past 512MB and crash the server.
 
@@ -207,8 +220,8 @@ VERIFIED: The 50KB file bypassed the 10MB file and finished FIRST without waitin
 
 #### Why SSE instead of Polling or WebSockets?
 1. **Short Polling Fails:** Polling every 2 seconds wastes server connections, triggers thousands of redundant SQL queries, and exhausts client rate limits.
-2. **WebSockets are Overkill:** Vectorization progress is strictly a **unidirectional server $ightarrow$ client push**. WebSockets require stateful bidirectional socket management and complex reverse proxy handshakes.
-3. **SSE is Resilient & Lightweight:** Runs over standard HTTP, natively streams live progress (5% $ightarrow$ 85% $ightarrow$ 100%), and works seamlessly through proxies.
+2. **WebSockets are Overkill:** Vectorization progress is strictly a **unidirectional server → client push**. WebSockets require stateful bidirectional socket management and complex reverse proxy handshakes.
+3. **SSE is Resilient & Lightweight:** Runs over standard HTTP, natively streams live progress (5% → 85% → 100%), and works seamlessly through proxies.
 
 #### Resilient SSE Pipeline Features:
 - **Proxy Buffer Flushing:** Sends an initial 2KB comment padding (`: ` + 2048 spaces) to immediately force reverse proxies (Nginx, Cloudflare, Render) to open the HTTP chunked stream without buffering.
@@ -227,7 +240,7 @@ In our frontend, chat sessions and research papers share a 1:1 relationship in t
 
 #### Atomic Cascade Implementation ([chatController.js](backend/src/controllers/chatController.js))
 When a user deletes a session from the UI:
-1. **Pinecone Vector Flush:** `await index.namespace(doc.pinecone_namespace).deleteAll()` wipes all vector vectors instantly.
+1. **Pinecone Vector Flush:** `await index.namespace(doc.pinecone_namespace).deleteAll()` wipes all vectors instantly.
 2. **Document Purge:** `DELETE FROM documents WHERE id = documentId` deletes the record from PostgreSQL.
 3. **Database Cascade:** PostgreSQL's foreign key constraint (`ON DELETE CASCADE`) automatically purges the `chat_sessions` row and all related `messages` in an atomic transaction.
 4. **No Zombie Sessions:** The document is permanently destroyed, preventing auto-heal resurrection bugs.
