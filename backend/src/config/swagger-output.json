@@ -12,20 +12,6 @@
     }
   ],
   "paths": {
-    "/": {
-      "get": {
-        "description": "",
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "tags": [
-          "Health"
-        ],
-        "summary": "GET /"
-      }
-    },
     "/api/auth/guest-id": {
       "get": {
         "description": "",
@@ -119,6 +105,9 @@
                     "example": "any"
                   },
                   "password": {
+                    "example": "any"
+                  },
+                  "guestId": {
                     "example": "any"
                   }
                 }

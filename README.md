@@ -26,9 +26,8 @@ _Engineered for zero event-loop starvation, 70% memory reduction, and crash-proo
 
 ### 🌐 Live Deployments
 
-> _Update these URLs once your deployment on Vercel and Render is complete:_
-> - **Frontend Web App (Vercel):** [https://your-frontend-app.vercel.app](https://your-frontend-app.vercel.app)
-> - **Backend API & Swagger UI (Render):** [https://your-backend-app.onrender.com/api-docs](https://your-backend-app.onrender.com/api-docs)
+> - **Frontend Web App (Vercel):** [https://personal-ai-research-assistance.vercel.app/](https://personal-ai-research-assistance.vercel.app/)
+> - **Backend API & Swagger UI (Render):** [https://personal-ai-research-assistance.onrender.com/api-docs](https://personal-ai-research-assistance.onrender.com/api-docs)
 
 ---
 
