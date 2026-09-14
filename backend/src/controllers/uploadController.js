@@ -33,8 +33,9 @@ async function processDocumentInBackground(documentId, namespace, chunks, fileNa
             message: `Starting embedding generation for ${chunks.length} chunks...`
         });
 
-        // Generate embeddings in balanced batches of 24 with live progress updates (5% -> 85%)
-        const embeddedChunks = await generateBatchEmbeddings(chunks, 24, ({ processed, total }) => {
+        // Generate embeddings in memory-safe batches of 6 (prevents ONNX tensor RAM spikes on 512MB instances)
+        const BATCH_SIZE = parseInt(process.env.EMBEDDING_BATCH_SIZE, 10) || 6;
+        const embeddedChunks = await generateBatchEmbeddings(chunks, BATCH_SIZE, ({ processed, total }) => {
             const embeddingPct = 5 + Math.round((processed / total) * 80);
             console.log(`[Upload] Embedding progress: ${processed}/${total} chunks (${embeddingPct}%)`);
             emitProgress({

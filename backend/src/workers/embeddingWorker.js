@@ -49,6 +49,11 @@ parentPort.on('message', async (message) => {
                 const output = await pipe(batch, { pooling: 'mean', normalize: true });
                 const embeddings = output.tolist();
 
+                // Immediately release native C++/WASM ONNX tensor allocation
+                if (output && typeof output.dispose === 'function') {
+                    output.dispose();
+                }
+
                 for (let j = 0; j < batch.length; j++) {
                     results.push({
                         chunk: batch[j],

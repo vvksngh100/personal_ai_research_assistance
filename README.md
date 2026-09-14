@@ -17,8 +17,8 @@ _Engineered for zero event-loop starvation, 70% memory reduction, and crash-proo
 
 <br />
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-00C7B7?style=for-the-badge&logo=vercel&logoColor=white)](#-live-deployments)
-[![API Docs](https://img.shields.io/badge/Swagger-Live%20API%20Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](#-live-deployments)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20App-00C7B7?style=for-the-badge&logo=vercel&logoColor=white)](https://personal-ai-research-assistance.vercel.app/)
+[![API Docs](https://img.shields.io/badge/Swagger-Live%20API%20Docs-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://personal-ai-research-assistance.onrender.com/api-docs)
 
 </div>
 
@@ -45,45 +45,45 @@ Unlike naive RAG implementations that act as brittle wrappers around commercial 
 ## High-Level System Topology
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                CLIENT TIER (React 19 + Vite)                           │
-│  - Real-Time Upload Progress (Live SSE Stream with Auto-Reconnect)                     │
-│  - Interactive Markdown Renderer with Grounded Citations ([1], [2])                    │
-│  - Session & Document State Management                                                 │
-└───────────────────────────────────────────┬────────────────────────────────────────────┘
-                                            │ HTTP / Server-Sent Events (SSE)
-                                            ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                             EXPRESS API SERVER (Main Thread)                           │
-│  - JWT & Guest Identity Routing (/api/auth)                                            │
-│  - Distributed Rate Limiter & Reverse Proxy Trust Configuration                        │
-│  - Bounded Dual-Lane QoS In-Memory Work Queue                                          │
-│  - Interactive OpenAPI / Swagger UI at /api-docs                                       │
-└─────────────────────┬────────────────────────────────────────────┬─────────────────────┘
-                      │ Zero-Copy IPC (ArrayBuffer)                │ IPC PostMessage
-                      ▼                                            ▼
-       ┌──────────────────────────────┐             ┌──────────────────────────────┐
-       │   PDF WORKER THREAD          │             │   EMBEDDING WORKER THREAD    │
-       │   (src/workers/pdfWorker.js) │             │   (src/workers/embedding...js│
-       │  - zlib stream decompression │             │  - @huggingface/transformers │
-       │  - Glyph-to-text extraction  │             │  - Xenova/bge-base-en-v1.5   │
-       │  - Overlapping chunker       │             │  - 8-bit Quantization (q8)   │
-       └──────────────────────────────┘             └──────────────┬───────────────┘
-                                                                   │ 768-dim Vectors
-                                                                   ▼
-┌──────────────────────────────┐                    ┌──────────────────────────────┐
-│  RELATIONAL METADATA STORE   │                    │     PINECONE VECTOR DB       │
-│  (PostgreSQL / Supabase)     │                    │  - Document-Scoped Namespaces│
-│  - Users, Sessions, Messages │                    │  - Top-K Cosine Similarity   │
-│  - Cascading Referential Del │                    │  - Metadata Payload Storage  │
-└──────────────────────────────┘                    └──────────────┬───────────────┘
-                                                                   │ Retrieved Context
-                                                                   ▼
-                                                    ┌──────────────────────────────┐
-                                                    │    GROQ CLOUD INFERENCE      │
-                                                    │  - Llama 3.3 70B Versatile   │
-                                                    │  - Strict Grounding Guardrail│
-                                                    └──────────────────────────────┘
++----------------------------------------------------------------------------------------+
+|                                CLIENT TIER (React 19 + Vite)                           |
+|  - Real-Time Upload Progress (Live SSE Stream with Auto-Reconnect)                     |
+|  - Interactive Markdown Renderer with Grounded Citations ([1], [2])                    |
+|  - Session & Document State Management                                                 |
++-------------------------------------------+--------------------------------------------+
+                                            | HTTP / Server-Sent Events (SSE)
+                                            v
++----------------------------------------------------------------------------------------+
+|                             EXPRESS API SERVER (Main Thread)                           |
+|  - JWT & Guest Identity Routing (/api/auth)                                            |
+|  - Distributed Rate Limiter & Reverse Proxy Trust Configuration                        |
+|  - Bounded Dual-Lane QoS In-Memory Work Queue                                          |
+|  - Interactive OpenAPI / Swagger UI at /api-docs                                       |
++---------------------+--------------------------------------------+---------------------+
+                      | Zero-Copy IPC (ArrayBuffer)                | IPC PostMessage
+                      v                                            v
+       +------------------------------+             +------------------------------+
+       |   PDF WORKER THREAD          |             |   EMBEDDING WORKER THREAD    |
+       |   (src/workers/pdfWorker.js) |             |   (src/workers/embedding...js|
+       |  - zlib stream decompression |             |  - @huggingface/transformers |
+       |  - Glyph-to-text extraction  |             |  - Xenova/bge-base-en-v1.5   |
+       |  - Overlapping chunker       |             |  - 8-bit Quantization (q8)   |
+       +------------------------------+             +--------------+---------------+
+                                                                   | 768-dim Vectors
+                                                                   v
++------------------------------+                    +------------------------------+
+|  RELATIONAL METADATA STORE   |                    |     PINECONE VECTOR DB       |
+|  (PostgreSQL / Supabase)     |                    |  - Document-Scoped Namespaces|
+|  - Users, Sessions, Messages |                    |  - Top-K Cosine Similarity   |
+|  - Cascading Referential Del |                    |  - Metadata Payload Storage  |
++------------------------------+                    +--------------+---------------+
+                                                                   | Retrieved Context
+                                                                   v
+                                                    +------------------------------+
+                                                    |    GROQ CLOUD INFERENCE      |
+                                                    |  - Llama 3.3 70B Versatile   |
+                                                    |  - Strict Grounding Guardrail|
+                                                    +------------------------------+
 ```
 
 ---

@@ -74,7 +74,7 @@ const server = app.listen(PORT, async () => {
 
             if(attempt === maxTries){
                 console.error(`[Retries Exausted]: All retry attempts exhausted. Exiting...`)
-                process.emit(1);
+                process.exit(1);
             }
 
             const delay = initialDelay * Math.pow(2, attempt - 1);
