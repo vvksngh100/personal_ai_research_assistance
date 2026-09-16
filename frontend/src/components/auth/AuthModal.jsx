@@ -245,7 +245,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
                     </div>
                   </div>
 
-                  <div>
+                  {/* <div>
                     <label style={{ fontSize: '0.8rem', fontWeight: '600', color: 'var(--text-primary)', display: 'block', marginBottom: '6px' }}>
                       Username
                     </label>
@@ -260,7 +260,7 @@ export default function AuthModal({ isOpen, onClose, defaultMode = 'signin' }) {
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                       />
                     </div>
-                  </div>
+                  </div> */}
                 </>
               )}
 
